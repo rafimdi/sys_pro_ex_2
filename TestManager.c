@@ -1,19 +1,18 @@
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOo Header oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 /*
- *Author â€“ Daniel ziv 205614308 and Redael Mdinaradze 319331823
-2. Project â€“ Exercise 2
-3. Using â€“ TestManager
-4. Description â€“ This Module is responsible for managing the different processes for each checked file
+ *Author – Daniel ziv 205614308 and Redael Mdinaradze 319331823
+2. Project – Exercise 2
+3. Using – TestManager
+4. Description – This Module is responsible for managing the different processes for each checked file
  */
+
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO Library Includes oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <windows.h>
-
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO Project Includes oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
-#include "TextReadAndWrite.h"
+#include <Windows.h>
+#include <sys/stat.h>
+#include <string.h>
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOo Defines oOoOoOoOoOoOoOoOoOoOoOoO*/
 
@@ -22,6 +21,62 @@
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
+void ReadFileNameAndProduceLog(FILE* files_to_test, char* output_files_directory, char** output_log_file_path,char** file_name);
+/**
+*
+* Accepts:
+* --------
+* 
+* files_to_test - string of the name of the file containing names of all the files we wish to test
+*
+* Returns:
+* --------
+* size of the file in bytes
+*
+*Description:
+*------------
+* ReturnFileSize returns amount of bytes in file file_to_test
+*
+*/
+int ReturnFileSize(FILE* files_to_test)
+{
+	int i=0;
+	char ch=getc(files_to_test);
+	while(ch!=EOF)
+	{
+		i++;
+		ch=getc(files_to_test);
+	}
+	return i;
+}
+/**
+*
+* Accepts:
+* --------
+* 
+* files_to_test - string of the name of the file containing names of all the files we wish to test
+*
+* five_bytes_arr- a char array (string) size 6 which will be filled with the first 5 bytes (chars) and 0 (string terminator) at the last place
+*
+* Returns:
+* --------
+* first 5 bytes output will be delivered using five_bytes_arr and the array will be null terminated
+*
+*Description:
+*------------
+* ReturnFiveBytes returns the first 5 bytes (chars) of a file.
+*
+*/
+void ReturnFiveBytes(FILE* files_to_test,char *five_bytes_arr)
+{
+	int i=0;
+	while(five_bytes_arr[i]!=EOF && i<5)
+	{
+		five_bytes_arr[i]=getc(files_to_test);
+		i++;		
+	}
+	five_bytes_arr[i]=0;
+}
 /**
 *
 * Accepts:
@@ -43,32 +98,59 @@
 * using default values for most parameters.
 */
 
-int main(int argc, char *argv[])
+int main (int argc,char* argv[])
 {
-	 char *str="tata.txt";
 	int i=0;
+	char *file_path=NULL;
+    char *output_log_file_path=NULL;
+    char *proccess_check_frequency=NULL;
+	char five_bytes[6];
+	FILE *fp=NULL;
 	if (argc<4)
-	{
 		exit(1);
+	fp=fopen(argv[1],"r");
+	if(fp==NULL)
+	{
+		printf("error openning file\n");
+		exit(2);
 	}
-    FILE* files_to_test=fopen(str,"w");
-    i++;
-    i++;
-    fclose(files_to_test);
-    files_to_test=fopen(argv[1],"r");
-    if (files_to_test == NULL )
-    {
-    	printf ("ERROR! - could not open the txt file \n");
-    	exit(2);
-    }
-    char *file_path=NULL;
-    char *output_log_file_path=argv[2];
-    int proccess_check_frequency=argv[3];
-    ReadFileNameAndProduceLog(files_to_test, argv[2],output_log_file_path,file_path);
-    fclose(files_to_test);
-    exit(0);
+	ReadFileNameAndProduceLog(fp, argv[2],&output_log_file_path,&file_path);
+	fclose(fp);
+	fp=fopen(file_path,"r");
+	if(fp==NULL)
+	{
+		printf("error openning file\n");
+		exit(4);
+	}
+	printf("file sizeis: %d\n",ReturnFileSize(fp));
+	fclose(fp);
+	fp=fopen(file_path,"r");
+	ReturnFiveBytes(fp,five_bytes);
+	printf("first 5 bytes %s\n",five_bytes);
+	printf("file : %s\n",file_path);
+	printf("file output: %s\n",output_log_file_path);
+	fclose(fp);
+	exit(0);
 }
 
+int FindLocationOfExtension(char* str)
+{
+	int i=0,location_of_last_point;
+	while(str[i]!=0)
+	{
+		while(str[i]!='.')
+		{
+			i++;
+			break;
+		}
+		if(str[i]=='.')
+		{
+			location_of_last_point=i;
+			i++;
+		}
+	}
+	return location_of_last_point;
+}
 /**
 *
 * Accepts:
@@ -92,35 +174,50 @@ int main(int argc, char *argv[])
 * and output file path for TestFile.exe
 *
 */
-void ReadFileNameAndProduceLog(FILE* files_to_test, char* output_files_directory, char* output_log_file_path,char* file_name)
+void ReadFileNameAndProduceLog(FILE* files_to_test, char* output_files_directory, char** output_log_file_path,char** file_name)
 {
 	int CUR_MAX = 100;
 	char *token;
 	char ch=getc(files_to_test);
 	int count = 0;
 	int length = 0;
-	file_name = (char*) malloc(sizeof(char) * CUR_MAX); // allocate buffer.
-
+	int locat;
+	(*file_name) = (char*) malloc(sizeof(char) * CUR_MAX); // allocate buffer.
+	if((*file_name)==NULL)
+	{
+		printf("oh no couldnt allocate mem\n");
+		exit (3);
+	}
 	while ( (ch != '\n') && (ch != EOF) )
 	{
 	    if(count ==CUR_MAX-1)
 	    { // expand if needed
 	      CUR_MAX *= 2; // expand to double the current size of anything similar.
 	      count = 0;
-	      file_name = realloc(file_name, CUR_MAX); // re allocate memory.
+	      (*file_name) = (char*)realloc((*file_name), CUR_MAX); // re allocate memory.
+		  if((*file_name)==NULL)
+			{
+				printf("oh no couldnt allocate mem\n");
+				exit (3);
+			}
 	    }
+		(*file_name)[length] = ch; // stuff in buffer.
 	    ch = getc(files_to_test); // read from stream.
-	    file_name[length] = ch; // stuff in buffer.
 	    length++;
 	    count++;
 	}
-	output_log_file_path=(char*) malloc(sizeof(char)*(strlen(file_name) +strlen(output_files_directory)+ 10));
-	if (output_log_file_path == NULL){
+	(*file_name)[length]=0;
+	(*output_log_file_path)=(char*) malloc(sizeof(char)*(strlen((*file_name)) +strlen(output_files_directory)+ 10));
+	if ((*output_log_file_path) == NULL){
 			printf("ERROR - MEM allocation failed\n");
 			exit(1);
 		}
-		token = strtok(file_name, ".");
-		strcpy(output_log_file_path,output_files_directory);
-		strcat(output_log_file_path, token);
-		strcat(output_log_file_path,"_log.txt");
+		token=(char*) malloc(sizeof(char) * strlen(*file_name)+10);
+		strncpy(token,*file_name,FindLocationOfExtension(*file_name));
+		token[FindLocationOfExtension(*file_name)]=0;
+		strcpy((*output_log_file_path),output_files_directory);
+		strcat((*output_log_file_path),"\\");
+		strcat((*output_log_file_path), token);
+		strcat((*output_log_file_path),"_log.txt");
+		printf("%s\n", *output_log_file_path);
 }
