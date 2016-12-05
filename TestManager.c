@@ -1,4 +1,4 @@
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOo Header oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
+/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOo Header oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOo*/
 /*
  *Author – Daniel ziv 205614308 and Redael Mdinaradze 319331823
 2. Project – Exercise 2
@@ -13,6 +13,11 @@
 #include <Windows.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <tchar.h>
+
+/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO project Includes oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
+
+#include "StringConversionTools.h"
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOo Defines oOoOoOoOoOoOoOoOoOoOoOoO*/
 
@@ -20,7 +25,21 @@
 #define BRUTAL_TERMINATION_CODE 0x55
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
+int LinesInFile(FILE *fp)
+{
+	int lines=1;
+	char ch;
+	while(!feof(fp))
+	{
+		ch = fgetc(fp);
+		if(ch == '\n')
+		{
+			lines++;
+		}
+	}
+	rewind(fp);
+	return lines;
+}
 void ReadFileNameAndProduceLog(FILE* files_to_test, char* output_files_directory, char** output_log_file_path,char** file_name);
 /**
 *
@@ -101,11 +120,22 @@ void ReturnFiveBytes(FILE* files_to_test,char *five_bytes_arr)
 int main (int argc,char* argv[])
 {
 	int i=0;
+	int time_till_wait=(int)(argv[2]-'0');
+	int lines_in_file;
 	char *file_path=NULL;
     char *output_log_file_path=NULL;
     char *proccess_check_frequency=NULL;
-	char five_bytes[6];
+	char *runtime_log_file_path=(char*)malloc((strlen(argv[2])+20)*sizeof(char));
+	char *command_line=(char*)malloc(sizeof(char)*1000);
+	LPTSTR command;
 	FILE *fp=NULL;
+	FILE *runtime_logfile=NULL;
+	PROCESS_INFORMATION *procinfo;
+	HANDLE* ipHandles;
+	DWORD waitcode=(DWORD)malloc(sizeof(DWORD));
+	DWORD exitcode;
+	BOOL retVal=0;
+	STARTUPINFO	startinfo = { sizeof(STARTUPINFO), NULL, 0 };
 	if (argc<4)
 		exit(1);
 	fp=fopen(argv[1],"r");
@@ -114,22 +144,62 @@ int main (int argc,char* argv[])
 		printf("error openning file\n");
 		exit(2);
 	}
-	ReadFileNameAndProduceLog(fp, argv[2],&output_log_file_path,&file_path);
-	fclose(fp);
-	fp=fopen(file_path,"r");
-	if(fp==NULL)
+	strcpy(runtime_log_file_path,argv[2]);
+	strcat(runtime_log_file_path,"\\");
+	strcat(runtime_log_file_path,"runtime_logfile.txt");
+	runtime_logfile=fopen(runtime_log_file_path,"w");
+	if(runtime_logfile==NULL)
 	{
 		printf("error openning file\n");
-		exit(4);
+		exit(2);
 	}
-	printf("file sizeis: %d\n",ReturnFileSize(fp));
-	fclose(fp);
-	fp=fopen(file_path,"r");
-	ReturnFiveBytes(fp,five_bytes);
-	printf("first 5 bytes %s\n",five_bytes);
-	printf("file : %s\n",file_path);
-	printf("file output: %s\n",output_log_file_path);
-	fclose(fp);
+	lines_in_file=LinesInFile(fp);
+	procinfo=(PROCESS_INFORMATION*)malloc(sizeof(PROCESS_INFORMATION)*lines_in_file);
+	ipHandles=(HANDLE*)malloc(sizeof(HANDLE)*lines_in_file);
+	for(i=0;i<lines_in_file;i++)
+	{
+		ReadFileNameAndProduceLog(fp, argv[2],&output_log_file_path,&file_path);
+		strcpy(command_line,"TestFile.exe");
+		strcat(command_line," ");
+		strcat(command_line,file_path);
+		strcat(command_line," ");
+		strcat(command_line,output_log_file_path);
+		command=ConvertCharStringToLPTSTR(command_line);
+		retVal = CreateProcess(NULL,command,NULL,NULL,FALSE,NORMAL_PRIORITY_CLASS,NULL,NULL,&startinfo,&procinfo[i]);
+		if (retVal == 0)
+		{
+			fprintf(runtime_logfile,"!!! Failed to create new process to run %s. Error code:%d!!!\n", file_path,GetLastError());
+			return;
+		}
+		fprintf(runtime_logfile,"Successfully created a process with ID %d to execute %s\n",i,file_path);
+		ipHandles[i]=procinfo[i].hProcess;
+	}
+		waitcode = WaitForMultipleObjects(lines_in_file,ipHandles,1,time_till_wait); /* Waiting 5 secs for the process to end */
+		fprintf(runtime_logfile,"WaitForMultipleObject output: ");
+		switch (waitcode)
+		{
+		case WAIT_TIMEOUT:
+			fprintf(runtime_logfile,"WAIT_TIMEOUT\n"); break;
+		case WAIT_OBJECT_0:
+			fprintf(runtime_logfile,"WAIT_OBJECT_0\n"); break;
+		default:
+			fprintf(runtime_logfile,"0x%x\n", waitcode);
+		}
+	if (waitcode == WAIT_TIMEOUT) /* Process is still alive */
+	{
+		fprintf(runtime_logfile,"Process was not terminated before timeout!\n"
+			"Terminating brutally!\n");
+		for(i=0;i<lines_in_file;i++)
+		TerminateProcess(ipHandles[i],BRUTAL_TERMINATION_CODE); /* Terminating process with an exit code of 55h */
+		Sleep(10); /* Waiting a few milliseconds for the process to terminate */
+	}
+	for(i=0;i<lines_in_file;i++)
+	{
+		GetExitCodeProcess(procinfo[i].hProcess, &exitcode);
+		fprintf(runtime_logfile,"The exit code for the process is 0x%x\n", exitcode);
+		CloseHandle(procinfo[i].hProcess); /* Closing the handle to the process */
+		CloseHandle(procinfo[i].hThread); /* Closing the handle to the main thread of the process */
+	}
 	exit(0);
 }
 
@@ -171,7 +241,7 @@ int FindLocationOfExtension(char* str)
 * Description:
 * -----------
 * ReadFileNameAndProduceLog reads a line from files_to_test and produces the File name
-* and output file path for TestFile.exe
+* and output file path for TestFile.exe 
 *
 */
 void ReadFileNameAndProduceLog(FILE* files_to_test, char* output_files_directory, char** output_log_file_path,char** file_name)
