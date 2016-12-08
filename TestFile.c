@@ -17,13 +17,52 @@
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOo Defines oOoOoOoOoOoOoOoOoOoOoOoO*/
 #define NUM_OF_TESTS 4
 
-void FindFileExtension(char* file_name,char *file_extension,int length_of_extension)
-{
-	strncpy(file_extension,file_name+(FindLocationOfExtension(file_name)*sizeof(char)),(length_of_extension));
-	file_extension[strlen(file_name)-FindLocationOfExtension(file_name)]=0;
-}
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
+long int file_size;
+char five_bytes_to_return[6];
+char file_extension[5];
+int length_of_extension,location_of_last_point;
+/**
+*
+* Accepts:
+* --------
+* str_to_test-a char array (string)
+*
+* Returns:
+* --------
+* location of file extension
+*
+*Description:
+*------------
+* FindLocationOfExtension finds the location of file extension
+*
+*/
+void FindLocationOfExtension(char* str)
+{
+	int i=0;
+	while(str[i]!=0)
+	{
+		while(str[i]!='.')
+		{
+			i++;
+			break;
+		}
+		if(str[i]=='.')
+		{
+			location_of_last_point=i;
+			i++;
+		}
+	}
+}	
+
+void FindFileExtension(char* file_name)
+{
+	FindLocationOfExtension(file_name);
+	length_of_extension=strlen(file_name)-location_of_last_point;
+	strncpy(file_extension,file_name+(location_of_last_point*sizeof(char)),(length_of_extension));
+	file_extension[strlen(file_name)-location_of_last_point]=0;
+}
 
 /**
 *
@@ -42,16 +81,13 @@ void FindFileExtension(char* file_name,char *file_extension,int length_of_extens
 *
 */
 
-int ReturnFileSize(FILE* files_to_test)
+void ReturnFileSize(FILE* file_to_test)
 {
-	int i=0;
-	char ch=getc(files_to_test);
-	while(ch!=EOF)
-	{
-		i++;
-		ch=getc(files_to_test);
-	}
-	return i;
+
+	rewind(file_to_test);
+	fseek(file_to_test,0,SEEK_END);
+	file_size=ftell(file_to_test);
+	rewind(file_to_test);
 }
 
 /**
@@ -72,51 +108,20 @@ int ReturnFileSize(FILE* files_to_test)
 * ReturnFiveBytes returns the first 5 bytes (chars) of a file.
 *
 */
-void ReturnFiveBytes(FILE* files_to_test,char *five_bytes_arr)
+void ReturnFiveBytes(FILE* file_to_test)
 {
 	int i=0;
-	char ch=getc(files_to_test);
+	char ch=getc(file_to_test);
 	while(ch!=EOF && i<5)
 	{
-		five_bytes_arr[i]=ch;
+		five_bytes_to_return[i]=ch;
 		i++;		
-		 ch=getc(files_to_test);
+		 ch=getc(file_to_test);
 	}
-	five_bytes_arr[i]=0;
+	five_bytes_to_return[i]=0;
+		rewind(file_to_test);
 }
-/**
-*
-* Accepts:
-* --------
-* str_to_test-a char array (string)
-*
-* Returns:
-* --------
-* location of file extension
-*
-*Description:
-*------------
-* FindLocationOfExtension finds the location of file extension
-*
-*/
-int FindLocationOfExtension(char* str)
-{
-	int i=0,location_of_last_point;
-	while(str[i]!=0)
-	{
-		while(str[i]!='.')
-		{
-			i++;
-			break;
-		}
-		if(str[i]=='.')
-		{
-			location_of_last_point=i;
-			i++;
-		}
-	}
-	return location_of_last_point;
-}
+
 /**
 *
 * Accepts:
@@ -136,19 +141,10 @@ int FindLocationOfExtension(char* str)
 */
 int main (int argc,char* argv[])
 {
-	char five_bytes[6];
-	int length_of_file_extension=strlen(argv[1])-FindLocationOfExtension(argv[1])+1;
-	char *file_extension=(char*)malloc(sizeof(char)*length_of_file_extension);
 	FILE *file_to_check=NULL;
 	FILE *log_file=NULL;
-	//LPTHREAD_START_ROUTINE FindLocationOfExtension(char* str);
-	//LPTHREAD_START_ROUTINE ReturnFiveBytes(FILE* files_to_test,char *five_bytes_arr);
-	//LPTHREAD_START_ROUTINE ReturnFileSize(FILE* files_to_test);
-	//LPTHREAD_START_ROUTINE FindLocationOfExtension;
-	int i;
 	HANDLE ThreadHandles[NUM_OF_TESTS];   /* An array of thread handles */
-	LPDWORD ThreadIDs[NUM_OF_TESTS];        /* An array of threadIDs */
-	DWORD exitcode;
+	DWORD ThreadIDs[NUM_OF_TESTS];/* An array of threadIDs */
 	if (argc<3)
 		exit(1);
 	file_to_check=fopen(argv[1],"r");
@@ -163,24 +159,16 @@ int main (int argc,char* argv[])
 		printf("error openning file\n");
 		exit(2);
 	}
-	/* CreateThread(
-		NULL,            
-		0,               
-		(LPTHREAD_START_ROUTINE)FindFileExtension,    
-		argv[1],   
-		0,                
-		ThreadIDs[0]);*/
-	FindFileExtension(argv[1],file_extension,strlen(argv[1])-FindLocationOfExtension(argv[1]));
+	ThreadHandles[0]=CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)FindFileExtension,argv[1],0,&ThreadIDs[0]);
+	ThreadHandles[1]=CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)ReturnFileSize,file_to_check,0,&ThreadIDs[1]);
+	ThreadHandles[2]=CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)ReturnFiveBytes,file_to_check,0,&ThreadIDs[2]);
+	//TODO:add threads for FILE TIME calculations 4/5 use globals for I/O
+	WaitForMultipleObjects(3,ThreadHandles,1,INFINITE);//TO DO when adding another function change amount of threads running (from 3 to 4 or 5)
+	fprintf(log_file,"the test file size is: %d\n",file_size);
+	fprintf(log_file,"The file’s first 5 bytes are: %s\n",five_bytes_to_return);
 	fprintf(log_file,"the file extension of the tested file is: %s\n",file_extension);
-	rewind(file_to_check);
-	fprintf(log_file,"the test file size is: %d\n",ReturnFileSize(file_to_check));
-	rewind(file_to_check);
-	fprintf(log_file,"the file was created on\n");
-	rewind(file_to_check);
+	fprintf(log_file,"the file was created on\n");//TODO: print times
 	fprintf(log_file,"the file was last modified on\n");
-	rewind(file_to_check);
-	ReturnFiveBytes(file_to_check,five_bytes);
-	fprintf(log_file,"The file’s first 5 bytes are: %s\n",five_bytes);
 	fclose(file_to_check);
 	fclose(log_file);
 	exit(0);
