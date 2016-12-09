@@ -1,6 +1,0 @@
-the file extension of the tested file is: .txt
-the test file size is: 16
-the file was created on
-the file was last modified on
-The file’s first 5 bytes are: MA
-MA

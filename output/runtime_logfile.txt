@@ -1,9 +1,0 @@
-Successfully created a process with ID 0 to execute file2.txt
-Successfully created a process with ID 1 to execute file3.txt
-Successfully created a process with ID 2 to execute file4.txt
-Successfully created a process with ID 3 to execute file5.txt
-WaitForMultipleObject output: WAIT_OBJECT_0
-The exit code for the process is 0x0
-The exit code for the process is 0x0
-The exit code for the process is 0x0
-The exit code for the process is 0x0
