@@ -13,6 +13,10 @@
 #include <Windows.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <tchar.h>
+#include <strsafe.h>
+
+
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOo Defines oOoOoOoOoOoOoOoOoOoOoOoO*/
 #define NUM_OF_TESTS 4
@@ -23,6 +27,13 @@ long int file_size;
 char five_bytes_to_return[6];
 char file_extension[5];
 int length_of_extension,location_of_last_point;
+FILETIME ftCreate, ftAccess, ftWrite;
+SYSTEMTIME stUTC_create , stLocal_create;
+SYSTEMTIME stUTC_mod, stLocal_mod;
+DWORD dwRet_mod, dwRet_create ;
+LPTSTR lpszString_mod, lpszString_create;
+DWORD dwSize_mod, dwSize_create;
+
 /**
 *
 * Accepts:
@@ -83,13 +94,13 @@ void FindFileExtension(char* file_name)
 
 void ReturnFileSize(FILE* file_to_test)
 {
-
+	
 	rewind(file_to_test);
 	fseek(file_to_test,0,SEEK_END);
 	file_size=ftell(file_to_test);
 	rewind(file_to_test);
 }
-
+//TODO- convert file size to KB,MB etc. 
 /**
 *
 * Accepts:
@@ -126,6 +137,57 @@ void ReturnFiveBytes(FILE* file_to_test)
 *
 * Accepts:
 * --------
+* file name
+* 
+*
+* Output logfile - string that represents the location of the log file we wish to create
+*
+* Returns:
+* --------
+* gets file timing data(created & modified)
+*
+* Description:
+*------------
+* GetFileTimeStatus uses the win32 get file time data
+*/
+
+void GetFileTimeStatus(HANDLE *hFile)
+{
+	int flag[5] ;
+	int check_for_error_index ;
+	Sleep(10);
+	// Retrieve the file times for the file.
+    flag[0] = GetFileTime(hFile, &ftCreate, &ftAccess, &ftWrite) ;
+	flag[1] = FileTimeToSystemTime(&ftCreate, &stUTC_create);
+	flag[2] = FileTimeToSystemTime(&ftWrite, &stUTC_mod);
+	flag[3] = SystemTimeToTzSpecificLocalTime(NULL, &stUTC_create, &stLocal_create);
+    flag[4] = SystemTimeToTzSpecificLocalTime(NULL, &stUTC_mod, &stLocal_mod);
+	Sleep(10);
+
+	for(check_for_error_index = 0; check_for_error_index < 5 ; check_for_error_index++)
+	{
+		if (flag[check_for_error_index] == 0){
+			printf("CreateFile failed with %d\n", GetLastError());
+		}
+	}
+	Sleep(10);
+	// Build a string showing the date and time.
+
+	//dwRet_create = StringCchPrintf(lpszString_create, dwSize_create, 
+ //       TEXT("%02d/%02d/%d  %02d:%02d"),
+ //       stLocal_create.wMonth, stLocal_create.wDay, stLocal_create.wYear,
+ //       stLocal_create.wHour, stLocal_create.wMinute);
+
+ //   dwRet_mod = StringCchPrintf(lpszString_mod, dwSize_mod, 
+ //       TEXT("%02d/%02d/%d  %02d:%02d"),
+ //       stLocal_mod.wMonth, stLocal_mod.wDay, stLocal_mod.wYear,
+ //       stLocal_mod.wHour, stLocal_mod.wMinute);
+
+}
+/**
+*
+* Accepts:
+* --------
 * All inputs are accepted through the argv[] array
 * File_path is a string representing the full path of the file we wish to check (technicly because of our assumptions its just the file name)
 *
@@ -139,11 +201,13 @@ void ReturnFiveBytes(FILE* file_to_test)
 *------------
 * TestFile uses the win32 API to create threads that runs checks for the file in file_path
 */
+
 int main (int argc,char* argv[])
 {
 	FILE *file_to_check=NULL;
-	FILE *log_file=NULL;
+	FILE *log_file=NULL;					// TODO - correct log file to the right format-not sure
 	HANDLE ThreadHandles[NUM_OF_TESTS];   /* An array of thread handles */
+	HANDLE hFile ;
 	DWORD ThreadIDs[NUM_OF_TESTS];/* An array of threadIDs */
 	if (argc<3)
 		exit(1);
@@ -159,16 +223,29 @@ int main (int argc,char* argv[])
 		printf("error openning file\n");
 		exit(2);
 	}
-	ThreadHandles[0]=CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)FindFileExtension,argv[1],0,&ThreadIDs[0]);
-	ThreadHandles[1]=CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)ReturnFileSize,file_to_check,0,&ThreadIDs[1]);
-	ThreadHandles[2]=CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)ReturnFiveBytes,file_to_check,0,&ThreadIDs[2]);
-	//TODO:add threads for FILE TIME calculations 4/5 use globals for I/O
-	WaitForMultipleObjects(3,ThreadHandles,1,INFINITE);//TO DO when adding another function change amount of threads running (from 3 to 4 or 5)
-	fprintf(log_file,"the test file size is: %d\n",file_size);
-	fprintf(log_file,"The file’s first 5 bytes are: %s\n",five_bytes_to_return);
+    hFile = CreateFile((LPCWSTR)argv[1], GENERIC_READ, FILE_SHARE_READ, NULL,
+        OPEN_EXISTING, 0, NULL);
+
+	if(hFile == INVALID_HANDLE_VALUE)
+    {
+        printf("CreateFile failed with %d\n", GetLastError());
+        return 0;
+    }
+
+
+	ThreadHandles[0] = CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)FindFileExtension,file_to_check,0,&ThreadIDs[0]);
+	ThreadHandles[1] = CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)ReturnFileSize,file_to_check,0,&ThreadIDs[1]);
+	ThreadHandles[2] = CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)ReturnFiveBytes,file_to_check,0,&ThreadIDs[2]);
+	ThreadHandles[3] = CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)GetFileTimeStatus,hFile,0,&ThreadIDs[3]);
+	
+	WaitForMultipleObjects(4,ThreadHandles,1,INFINITE);
 	fprintf(log_file,"the file extension of the tested file is: %s\n",file_extension);
-	fprintf(log_file,"the file was created on\n");//TODO: print times
-	fprintf(log_file,"the file was last modified on\n");
+	fprintf(log_file,"the test file size is: %d\n",file_size);
+	fprintf(log_file,"the file was created on %02d/%02d/%d  %02d:%02d\n",stLocal_create.wDay, stLocal_create.wMonth, stLocal_create.wYear,
+        stLocal_create.wHour, stLocal_create.wMinute );
+	fprintf(log_file,"the file was last modified on %02d/%02d/%d  %02d:%02d\n",stLocal_mod.wDay, stLocal_mod.wMonth, stLocal_mod.wYear,
+        stLocal_mod.wHour, stLocal_mod.wMinute );// TODO - cpmplete the format
+	fprintf(log_file,"The file’s first 5 bytes are: %s\n",five_bytes_to_return);
 	fclose(file_to_check);
 	fclose(log_file);
 	exit(0);
