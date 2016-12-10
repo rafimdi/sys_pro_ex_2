@@ -1,0 +1,54 @@
+add globabl variables:
+long int file_size;//should already exist
+int file_size_orginized[5];// we assume no file of size larger then 1024 terabytes exists in the system.
+
+in the function ReturnFileSize:
+void ReturnFileSize(FILE* file_to_test)
+{
+	int i=0;
+	
+	rewind(file_to_test);
+	fseek(file_to_test,0,SEEK_END);
+	file_size=ftell(file_to_test);
+	while(file_size>0)// this was added (the purpose is obvious)
+	{
+		file_size_orginized[i]=(int)file_size%1024;
+		file_size/=1024;//not sure if this is allowed
+	}
+	rewind(file_to_test);
+}
+
+
+in main: changes were made to print (so that it prints file size in bytes KBS etc as needed):
+fprintf(log_file,"the file extension of the tested file is: %s\n",file_extension);
+	fprintf(log_file,"the test file size is: ");
+	for(i=0;i<=5;i++)
+	{
+		if(file_size_orginized[i]!=0)
+		{
+			switch (i)
+			{
+				case 0:
+				fprintf(log_file,"%d, bytes ");
+				break;
+				case 1:
+				fprintf(log_file,"%d, KBs ");
+				break;
+				case 2:
+				fprintf(log_file,"%d, MBs ");
+				break;
+				case 3:
+				fprintf(log_file,"%d, GBs ");
+				break;
+				case 4:
+				fprintf(log_file,"%d, TBs ");
+				break;
+				case 5:
+				fprintf(log_file,"%d, PBs ");
+				break;
+			}
+		}
+	}// next line has\n added to it for obvious reasons.
+
+		fprintf(log_file,"\nthe file was created on %02d/%02d/%d  %02d:%02d\n",stLocal_create.wDay, stLocal_create.wMonth, stLocal_create.wYear,
+
