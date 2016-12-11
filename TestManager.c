@@ -28,11 +28,12 @@
 typedef struct proc_info_list
 {
 	PROCESS_INFORMATION procinfo;
+	char* command;
 	struct proc_info_list *next_proc;
 
 }procInfo_type;
 
-void addToProcList(procInfo_type **procinfo_list_hd_ptr,PROCESS_INFORMATION procinfo)
+void addToProcList(procInfo_type **procinfo_list_hd_ptr,PROCESS_INFORMATION procinfo,char *command)
 {
 	procInfo_type  *tmp_node = *(procinfo_list_hd_ptr) ;
 	procInfo_type *new_proc_node = (procInfo_type*) malloc(sizeof(procInfo_type));
@@ -43,6 +44,7 @@ void addToProcList(procInfo_type **procinfo_list_hd_ptr,PROCESS_INFORMATION proc
 	}
 	new_proc_node->procinfo = procinfo;
 	new_proc_node->next_proc = NULL ;
+	new_proc_node->command = command;
 	// check if List is empty
 	if ( *(procinfo_list_hd_ptr) == NULL)
 	{
@@ -135,9 +137,21 @@ void ReadFileNameAndProduceLog(FILE* files_to_test, char* output_files_directory
 
 void print_running_proc(procInfo_type *running_proc_list,FILE *runtime_logfile)
 {
+	
 	procInfo_type *tmp = running_proc_list;
+	FILETIME kernel_time;
+	FILETIME user_time;
+	FILETIME creation_time;
+	FILETIME exit_time;
+	FILETIME time_to_decode;
+	SYSTEMTIME* time_decoded;
+	fprintf(runtime_logfile,"List of running processes:\n");
 	while (tmp != NULL)
 	{
+		GetProcessTimes(tmp->procinfo.hProcess,&creation_time,&exit_time,&kernel_time,&user_time);
+		time_to_decode=kernel_time+ user_time;
+		FileTimeToSystemTime(&time_to_decode,time_decoded);
+		fprintf(runtime_logfile,"Process %d running command %s for %d seconds and %d milliseconds\n",tmp->procinfo.dwThreadId, tmp->command,time_decoded.wsecond,time_decoded.wmilliseconds )
 //		fprintf(); //TODO
 		tmp = tmp->next_proc ;
 	}
@@ -147,8 +161,25 @@ void print_running_proc(procInfo_type *running_proc_list,FILE *runtime_logfile)
 void print_finish_proc(procInfo_type *end_proc_list, FILE *runtime_logfile)
 {
 	procInfo_type *tmp = end_proc_list;
+	FILETIME kernel_time;
+	FILETIME user_time;
+	FILETIME creation_time;
+	FILETIME exit_time;
+	DWORD* exit_code;
+	int seconds;
+	int milliseconds;
+	SYSTEMTIME* exit_time_decoded;
+	SYSTEMTIME* current_time;
+	fprintf(runtime_logfile,"List of finished processes:\n");
 	while (tmp != NULL)
 	{
+		GetProcessTimes(tmp->procinfo.hProcess,&creation_time,&exit_time,&kernel_time,&user_time);
+		FileTimeToSystemTime(&exit_time,exit_time_decoded);
+		GetSystemTime(current_time);
+		GetExitCodeProcess(tmp->procinfo.hProcess,exit_code);
+		seconds=(int)(exit_time_decoded->wsecond-current_time.wsecond);
+		milliseconds=(int)(exit_time_decoded->wmilliseconds-current_time.wmilliseconds);
+		fprintf(runtime_logfile,"Process %d ran command %s and exited with exit code after %d seconds and %d milliseconds\n",tmp->procinfo.dwThreadId, tmp->command,exit_code,seconds,milliseconds )
 		tmp = tmp->next_proc ;
 //		fprintf();//TODO
 	}
@@ -238,8 +269,8 @@ int main (int argc,char* argv[])
 			return;
 		}
 		else{
-		fprintf(runtime_logfile,"Successfully created a process with ID %d to execute %s\n",procinfo.dwProcessId ,file_path);//change i->procees_id
-		addToProcList(&procinfo_list_hd_ptr, procinfo);
+		fprintf(runtime_logfile,"Successfully created a process with ID %d to execute %s\n",procinfo.dwProcessId ,command_line);//change i->procees_id
+		addToProcList(&procinfo_list_hd_ptr, procinfo,command_line);
 		//ipHandles[i]=procinfo[i].hProcess;//TODO --  will also have to define a linked list for ipHandle
 		}	
 	}
@@ -260,17 +291,17 @@ int main (int argc,char* argv[])
 			// will get a new running process list
 			if (exitcode == (DWORD)STILL_ACTIVE_PROC)
 			{
-				addToProcList(&running_proc_list, tmp_proc->procinfo); 
+				addToProcList(&running_proc_list, tmp_proc->procinfo,tmp_proc->command); 
 			}
 			else
 			{
-				addToProcList(&end_proc_list, tmp_proc->procinfo);
+				addToProcList(&end_proc_list, tmp_proc->procinfo,tmp_proc->command);
 			}
 			tmp_proc = tmp_proc->next_proc ;
 		}
 		run_proc_len = get_proc_list_len(running_proc_list);
 		if(run_proc_len != 0){
-			print_running_proc(running_proc_list, runtime_logfile);
+			print_running_proc(running_proc_list, runtime_logfile,);
 		}
 		print_finish_proc(end_proc_list, runtime_logfile);
 	}
