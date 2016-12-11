@@ -23,8 +23,77 @@
 
 #define TIMEOUT_IN_MILLISECONDS 5000
 #define BRUTAL_TERMINATION_CODE 0x55
-
+#define STILL_ACTIVE_PROC       259
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
+typedef struct proc_info_list
+{
+	PROCESS_INFORMATION procinfo;
+	struct proc_info_list *next_proc;
+
+}procInfo_type;
+
+void addToProcList(procInfo_type **procinfo_list_hd_ptr,PROCESS_INFORMATION procinfo)
+{
+	procInfo_type  *tmp_node = *(procinfo_list_hd_ptr) ;
+	procInfo_type *new_proc_node = (procInfo_type*) malloc(sizeof(procInfo_type));
+	if(new_proc_node == NULL)
+	{
+		printf("MEM allocation failed\n");
+		exit(-1);
+	}
+	new_proc_node->procinfo = procinfo;
+	new_proc_node->next_proc = NULL ;
+	// check if List is empty
+	if ( *(procinfo_list_hd_ptr) == NULL)
+	{
+		*(procinfo_list_hd_ptr) = new_proc_node ;
+		return ;
+	}
+	// check if the new_node goes to the begging of the linked list.
+	if( new_proc_node->procinfo.dwProcessId < (*procinfo_list_hd_ptr)->procinfo.dwProcessId)
+	{
+		new_proc_node->next_proc = *(procinfo_list_hd_ptr);
+		*(procinfo_list_hd_ptr) = new_proc_node;
+		return ;
+	}
+	
+		while ( tmp_node->next_proc != NULL )
+		{
+			if (new_proc_node->procinfo.dwProcessId < tmp_node->next_proc->procinfo.dwProcessId)
+			{
+				new_proc_node->next_proc = tmp_node->next_proc;
+				tmp_node->next_proc = new_proc_node;
+				return ; // if the function enters this if statement, it will insert to the list, thus a return can be made
+			}
+			tmp_node = tmp_node->next_proc;
+		}
+		// if the function gets to this segment ----> the new process' ID is the biggest---> add it to as the last node.
+		tmp_node->next_proc = new_proc_node;
+		return ;
+}
+
+int get_proc_list_len(procInfo_type *procinfo_list_hd_ptr)
+{
+	int list_len = 0;
+	procInfo_type *tmp = procinfo_list_hd_ptr ;
+	while (tmp != NULL)
+	{
+		tmp= tmp->next_proc;
+		list_len++;
+	}
+	return list_len;
+}
+void get_handle_list_data(HANDLE *ipHandles, procInfo_type *procinfo_list_hd_ptr, int handle_arr_size)
+{
+	int i;
+	procInfo_type *tmp = procinfo_list_hd_ptr;
+	for(i = 0; i< handle_arr_size; i++)
+	{
+		ipHandles[i] = tmp->procinfo.hProcess;
+		tmp = tmp->next_proc;
+		
+	}
+}
 int LinesInFile(FILE *fp)
 {
 	int lines=1;
@@ -41,61 +110,8 @@ int LinesInFile(FILE *fp)
 	return lines;
 }
 void ReadFileNameAndProduceLog(FILE* files_to_test, char* output_files_directory, char** output_log_file_path,char** file_name);
-/**
-*
-* Accepts:
-* --------
-* 
-* files_to_test - string of the name of the file containing names of all the files we wish to test
-*
-* Returns:
-* --------
-* size of the file in bytes
-*
-*Description:
-*------------
-* ReturnFileSize returns amount of bytes in file file_to_test
-*
-*/
-int ReturnFileSize(FILE* files_to_test)
-{
-	int i=0;
-	char ch=getc(files_to_test);
-	while(ch!=EOF)
-	{
-		i++;
-		ch=getc(files_to_test);
-	}
-	return i;
-}
-/**
-*
-* Accepts:
-* --------
-* 
-* files_to_test - string of the name of the file containing names of all the files we wish to test
-*
-* five_bytes_arr- a char array (string) size 6 which will be filled with the first 5 bytes (chars) and 0 (string terminator) at the last place
-*
-* Returns:
-* --------
-* first 5 bytes output will be delivered using five_bytes_arr and the array will be null terminated
-*
-*Description:
-*------------
-* ReturnFiveBytes returns the first 5 bytes (chars) of a file.
-*
-*/
-void ReturnFiveBytes(FILE* files_to_test,char *five_bytes_arr)
-{
-	int i=0;
-	while(five_bytes_arr[i]!=EOF && i<5)
-	{
-		five_bytes_arr[i]=getc(files_to_test);
-		i++;		
-	}
-	five_bytes_arr[i]=0;
-}
+
+
 /**
 *
 * Accepts:
@@ -117,24 +133,74 @@ void ReturnFiveBytes(FILE* files_to_test,char *five_bytes_arr)
 * using default values for most parameters.
 */
 
+void print_running_proc(procInfo_type *running_proc_list,FILE *runtime_logfile)
+{
+	procInfo_type *tmp = running_proc_list;
+	while (tmp != NULL)
+	{
+//		fprintf(); //TODO
+		tmp = tmp->next_proc ;
+	}
+
+}
+
+void print_finish_proc(procInfo_type *end_proc_list, FILE *runtime_logfile)
+{
+	procInfo_type *tmp = end_proc_list;
+	while (tmp != NULL)
+	{
+		tmp = tmp->next_proc ;
+//		fprintf();//TODO
+	}
+}
+
+void close_handle(procInfo_type *list)
+{
+	procInfo_type *tmp = list ;
+	while (tmp != NULL)
+	{
+		CloseHandle(tmp->procinfo.hProcess); /* Closing the handle to the process */
+		CloseHandle(tmp->procinfo.hThread); /* Closing the handle to the main thread of the process */
+		tmp = tmp->next_proc;
+	}
+}
+void free_list (procInfo_type *list)
+{
+	procInfo_type *tmp = list ;
+	
+	while (tmp != NULL)
+	{
+		tmp = tmp->next_proc ;
+		free(list);
+		list = tmp;
+	}
+}
+
 int main (int argc,char* argv[])
 {
 	int i=0;
-	int time_till_wait=(int)(argv[2]-'0');
+	//int time_till_wait=(int)(argv[2]-'0'); //What is this? argv[2] is the output directory.
 	int lines_in_file;
+	int run_proc_len ;
 	char *file_path=NULL;
     char *output_log_file_path=NULL;
-    char *proccess_check_frequency=NULL;
+    int proccess_check_frequency= (atoi(argv[3]));
 	char *runtime_log_file_path=(char*)malloc((strlen(argv[2])+20)*sizeof(char));
 	char *command_line=(char*)malloc(sizeof(char)*1000);
 	LPTSTR command;
 	FILE *fp=NULL;
 	FILE *runtime_logfile=NULL;
-	PROCESS_INFORMATION *procinfo;
-	HANDLE* ipHandles;
+	PROCESS_INFORMATION procinfo;
+	procInfo_type *procinfo_list_hd_ptr = NULL ;
+	procInfo_type *running_proc_list = NULL ;
+	procInfo_type *end_proc_list = NULL;
+	procInfo_type *tmp_proc  ;
+	HANDLE* ipHandles; // TODO ---> DONE
+	int handle_arr_size ;
 	DWORD waitcode=(DWORD)malloc(sizeof(DWORD));
 	DWORD exitcode;
 	BOOL retVal=0;
+	LPDWORD lpExitCode;
 	STARTUPINFO	startinfo = { sizeof(STARTUPINFO), NULL, 0 };
 	if (argc<4)
 		exit(1);
@@ -154,8 +220,7 @@ int main (int argc,char* argv[])
 		exit(2);
 	}
 	lines_in_file=LinesInFile(fp);
-	procinfo=(PROCESS_INFORMATION*)malloc(sizeof(PROCESS_INFORMATION)*lines_in_file);
-	ipHandles=(HANDLE*)malloc(sizeof(HANDLE)*lines_in_file);
+	
 	for(i=0;i<lines_in_file;i++)
 	{
 		ReadFileNameAndProduceLog(fp, argv[2],&output_log_file_path,&file_path);
@@ -165,41 +230,68 @@ int main (int argc,char* argv[])
 		strcat(command_line," ");
 		strcat(command_line,output_log_file_path);
 		command=ConvertCharStringToLPTSTR(command_line);
-		retVal = CreateProcess(NULL,command,NULL,NULL,FALSE,NORMAL_PRIORITY_CLASS,NULL,NULL,&startinfo,&procinfo[i]);
+		//create process
+		retVal = CreateProcess(NULL,command,NULL,NULL,FALSE,NORMAL_PRIORITY_CLASS,NULL,NULL,&startinfo,&procinfo);
 		if (retVal == 0)
 		{
 			fprintf(runtime_logfile,"!!! Failed to create new process to run %s. Error code:%d!!!\n", file_path,GetLastError());
 			return;
 		}
-		fprintf(runtime_logfile,"Successfully created a process with ID %d to execute %s\n",i,file_path);
-		ipHandles[i]=procinfo[i].hProcess;
+		else{
+		fprintf(runtime_logfile,"Successfully created a process with ID %d to execute %s\n",procinfo.dwProcessId ,file_path);//change i->procees_id
+		addToProcList(&procinfo_list_hd_ptr, procinfo);
+		//ipHandles[i]=procinfo[i].hProcess;//TODO --  will also have to define a linked list for ipHandle
+		}	
 	}
-		waitcode = WaitForMultipleObjects(lines_in_file,ipHandles,1,time_till_wait); /* Waiting 5 secs for the process to end */
-		fprintf(runtime_logfile,"WaitForMultipleObject output: ");
-		switch (waitcode)
+	handle_arr_size = get_proc_list_len(procinfo_list_hd_ptr);
+	ipHandles=(HANDLE*)malloc(sizeof(HANDLE)*handle_arr_size);
+	get_handle_list_data(ipHandles, procinfo_list_hd_ptr, handle_arr_size);
+	run_proc_len = handle_arr_size;
+	// start to make sampels to check process status.
+
+	while (run_proc_len > 0)
+	{
+		WaitForMultipleObjects(handle_arr_size,ipHandles,1,proccess_check_frequency);
+		Sleep(10);
+		tmp_proc = procinfo_list_hd_ptr ;
+		while (tmp_proc != NULL)
 		{
-		case WAIT_TIMEOUT:
-			fprintf(runtime_logfile,"WAIT_TIMEOUT\n"); break;
-		case WAIT_OBJECT_0:
-			fprintf(runtime_logfile,"WAIT_OBJECT_0\n"); break;
-		default:
-			fprintf(runtime_logfile,"0x%x\n", waitcode);
+			GetExitCodeProcess(tmp_proc->procinfo.hProcess , &exitcode); 
+			// will get a new running process list
+			if (exitcode == (DWORD)STILL_ACTIVE_PROC)
+			{
+				addToProcList(&running_proc_list, tmp_proc->procinfo); 
+			}
+			else
+			{
+				addToProcList(&end_proc_list, tmp_proc->procinfo);
+			}
+			tmp_proc = tmp_proc->next_proc ;
 		}
-	if (waitcode == WAIT_TIMEOUT) /* Process is still alive */
-	{
-		fprintf(runtime_logfile,"Process was not terminated before timeout!\n"
-			"Terminating brutally!\n");
-		for(i=0;i<lines_in_file;i++)
-		TerminateProcess(ipHandles[i],BRUTAL_TERMINATION_CODE); /* Terminating process with an exit code of 55h */
-		Sleep(10); /* Waiting a few milliseconds for the process to terminate */
+		run_proc_len = get_proc_list_len(running_proc_list);
+		if(run_proc_len != 0){
+			print_running_proc(running_proc_list, runtime_logfile);
+		}
+		print_finish_proc(end_proc_list, runtime_logfile);
 	}
-	for(i=0;i<lines_in_file;i++)
-	{
-		GetExitCodeProcess(procinfo[i].hProcess, &exitcode);
-		fprintf(runtime_logfile,"The exit code for the process is 0x%x\n", exitcode);
-		CloseHandle(procinfo[i].hProcess); /* Closing the handle to the process */
-		CloseHandle(procinfo[i].hThread); /* Closing the handle to the main thread of the process */
-	}
+	// when exits this loop, all the process are finished---> print to log file appropiate message.
+	fprintf(runtime_logfile, "All the processes have finished running. Exiting program.\n");
+	//Sleep(10); /* Waiting a few milliseconds for the process to terminate */
+	//}
+	//for(i=0;i<lines_in_file;i++)
+	//{
+	//	GetExitCodeProcess(procinfo[i].hProcess, &exitcode);
+	//	fprintf(runtime_logfile,"The exit code for the process is 0x%x\n", exitcode);
+	//	CloseHandle(procinfo[i].hProcess); /* Closing the handle to the process */
+	//	CloseHandle(procinfo[i].hThread); /* Closing the handle to the main thread of the process */
+	//}
+
+	//close handels & free all lists.
+	close_handle(procinfo_list_hd_ptr); // both process & tread handels
+	free_list(procinfo_list_hd_ptr);
+	free_list(running_proc_list);
+	free_list(end_proc_list);
+
 	exit(0);
 }
 
